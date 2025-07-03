@@ -29,12 +29,14 @@ const Receipts: React.FC = () => {
         const totalIncome = financialSummary.totalIncome;
         const totalExpenses = financialSummary.totalExpenses;
 
-        const monthlyChart: { [key: string]: { name: string; income: number; expenses: number } } = {};
+        const monthlyChart: { [key: string]: { name: string; income: number; expenses: number; sortKey: string } } = {};
         
         // Include PAID invoices in income (consistent with standardized calculation)
         state.invoices.filter(inv => inv.status === InvoiceStatus.Paid).forEach(inv => {
-            const month = new Date(inv.paidDate || inv.issueDate).toLocaleString('default', { month: 'short', year: '2-digit' });
-            if (!monthlyChart[month]) monthlyChart[month] = { name: month, income: 0, expenses: 0 };
+            const date = new Date(inv.paidDate || inv.issueDate);
+            const month = date.toLocaleString('default', { month: 'short', year: '2-digit' });
+            const sortKey = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
+            if (!monthlyChart[month]) monthlyChart[month] = { name: month, income: 0, expenses: 0, sortKey };
             const subtotal = inv.items.reduce((itemSum, item) => itemSum + item.price * item.quantity, 0);
             const revenue = subtotal;
             monthlyChart[month].income += revenue;
@@ -42,8 +44,10 @@ const Receipts: React.FC = () => {
         
         // Include receipt transactions
         state.receipts.forEach(rec => {
-            const month = new Date(rec.date).toLocaleString('default', { month: 'short', year: '2-digit' });
-            if (!monthlyChart[month]) monthlyChart[month] = { name: month, income: 0, expenses: 0 };
+            const date = new Date(rec.date);
+            const month = date.toLocaleString('default', { month: 'short', year: '2-digit' });
+            const sortKey = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
+            if (!monthlyChart[month]) monthlyChart[month] = { name: month, income: 0, expenses: 0, sortKey };
             if (rec.amount > 0) monthlyChart[month].income += rec.amount;
             else monthlyChart[month].expenses += Math.abs(rec.amount);
         });
@@ -53,6 +57,12 @@ const Receipts: React.FC = () => {
             paymentData[rec.paymentMethod] = (paymentData[rec.paymentMethod] || 0) + Math.abs(rec.amount);
         });
 
+        // Sort months chronologically and remove sortKey before returning
+        const sortedChartData = Object.values(monthlyChart)
+            .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+            .slice(-12)
+            .map(({ sortKey, ...rest }) => rest);
+
         return {
             summary: {
                 totalIncome,
@@ -60,7 +70,7 @@ const Receipts: React.FC = () => {
                 netIncome: financialSummary.netIncome
             },
             filteredReceipts: filtered,
-            chartData: Object.values(monthlyChart).slice(-12),
+            chartData: sortedChartData,
             paymentMethodData: Object.entries(paymentData).map(([name, value]) => ({ name, value }))
         };
 
